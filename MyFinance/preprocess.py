@@ -3,8 +3,8 @@ import csv
 from datetime import *
 import re
 
-class JE(object):
-
+class JEntry(object):
+    per_day = 0
     def __init__(self, pay_date, eff_date, narrative, error_code, amount, balance):
         self.pay_date = pay_date
         self.eff_date = eff_date
@@ -18,7 +18,11 @@ class JE(object):
         self.subcat = subcat  
         self.type = type
         self.days = days
-
+    def per_day(self):
+        if(self.days != 0):
+            self.per_day = float(self.amount)/self.days
+    def out(self):
+        return [self.eff_date.isoformat()[:10], self.text, self.amount, self.days, self.per_day, self.cat, self.subcat, self.ledger]
 def process_bank_statements(file_name):    
     with open(file_name) as file:
         raw_data = [ row for row in csv.reader(file)]
@@ -26,7 +30,7 @@ def process_bank_statements(file_name):
     data = []
     for row in raw_data[1:]:
         if len(row) == 6:
-            data.append(JE(row[0], row[1], row[2], row[3], row[4],row[5]))
+            data.append(JEntry(row[0], row[1], row[2], row[3], row[4],row[5]))
         else:
             print('ded')
     
@@ -38,9 +42,9 @@ def process_bank_statements(file_name):
             row.amount = 0
         if(row.amount < 0 ):
             row.amount = abs(row.amount)
-            row.type = 'debit'
+            row.ledger = 'debit'
         else:
-            row.type = 'credit'
+            row.ledger = 'credit'
         if(not row.eff_date):
             row.eff_date = row.pay_date
         row.eff_date = datetime.strptime(row.eff_date, '%d %b %Y')
@@ -55,7 +59,7 @@ def process_bank_statements(file_name):
     
         if(re.search('KPMG.*93291', row.text) is not None):
             row.set_cat('General Living', 'Salary', 'Fixed', 14)
-    
+        
         elif(re.search('Ref:.+rent.*', row.text) is not None):
             row.set_cat('General Living', 'Rent', 'Fixed', 14)
         elif(re.search('RENTCARDPAYMENT', row.text) is not None):
@@ -65,16 +69,18 @@ def process_bank_statements(file_name):
         elif(re.search('ATM OPERATOR FEE', row.text) is not None or re.search('non bcu ATM trans fee', row.text) is not None):
             row.set_cat('Other', 'ATM Fee', 'Variable')
         elif(re.search('MISSION', row.text) is not None):
-            row.set_cat('Other', 'Charity', 'Expense')
+            row.set_cat('Other', 'Charity', 'Expense', 365/12)
         elif(re.search('personal product fee', row.text) is not None):
-            row.set_cat('Other', 'Bank Fees', 'Expense')
+            row.set_cat('Other', 'Bank Fees', 'Expense', 365/12)
         elif(re.search('TRANSPORT FOR NSW SYDNEY', row.text) is not None):
             row.set_cat('General Living', 'Transport', 'Expense')
         elif(re.search('ICE SKATING', row.text) is not None):
             row.set_cat('Leasure', 'Ice Skating', 'Expense')
+        elif(re.search('TELSTRA', row.text) is not None):
+            row.set_cat('General Living', 'Mobile Phone', 'Expense', 28)
         else:
             row.set_cat()
-    
+        row.per_day()
         #if(row.eff_date == ''):
            # print(row.pay_date)
     return data
